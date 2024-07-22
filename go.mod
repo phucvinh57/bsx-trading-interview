@@ -2,7 +2,11 @@ module trading-bsx
 
 go 1.22.5
 
-require github.com/labstack/echo/v4 v4.12.0
+require (
+	github.com/labstack/echo/v4 v4.12.0
+	github.com/linxGnu/grocksdb v1.6.20
+	github.com/rs/zerolog v1.33.0
+)
 
 require github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 
