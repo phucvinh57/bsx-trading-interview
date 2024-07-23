@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"net/http"
 	"time"
-	"trading-bsx/pkg/repository"
+	"trading-bsx/pkg/repository/rocksdb"
 	"trading-bsx/pkg/utils"
 
 	"github.com/labstack/echo/v4"
@@ -36,43 +36,32 @@ type Order struct {
 }
 
 func (order *Order) ParseKV(key []byte, value []byte) {
-	// 1 byte for order type, 16 bytes for price, 8 bytes for timestamp, 8 bytes for user ID
-	order.Type = BUY
-	if key[0] == 1 {
-		order.Type = SELL
-	}
-	price := new(big.Int).SetBytes(key[1:17])
+	price := new(big.Int).SetBytes(key[:16])
 	priceFloat := big.NewFloat(0).SetInt(price)
 	priceFloat.Quo(priceFloat, big.NewFloat(WEI18))
 	order.Price, _ = priceFloat.Float64()
 
-	order.Timestamp = int64(binary.BigEndian.Uint64(key[17:25]))
-	order.UserId = binary.BigEndian.Uint64(key[25:33])
+	order.Timestamp = int64(binary.BigEndian.Uint64(key[16:24]))
+	order.UserId = binary.BigEndian.Uint64(key[24:32])
 }
 
 func (order *Order) ToKVBytes() ([]byte, []byte) {
-	// 1 byte for order type, 16 bytes for price, 8 bytes for timestamp, 8 bytes for user ID
-	key := make([]byte, 33)
-	if order.Type == SELL {
-		key[0] = 1
-	} else {
-		key[0] = 0
-	}
+	// 16 bytes for price, 8 bytes for timestamp, 8 bytes for user ID
+	key := make([]byte, 32)
 
 	rawPrice := big.NewFloat(order.Price)
 	priceInt := big.NewInt(0)
 	rawPrice.Mul(rawPrice, big.NewFloat(WEI18)).Int(priceInt)
-	copy(key[17-len(priceInt.Bytes()):], priceInt.Bytes())
-	key = append(key, priceInt.Bytes()...)
+	copy(key[16-len(priceInt.Bytes()):], priceInt.Bytes())
 
 	timestamp := time.Now().UnixNano()
 	timestampBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(timestampBytes, uint64(timestamp))
-	copy(key[17:25], timestampBytes)
+	copy(key[16:24], timestampBytes)
 
 	userIdBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(userIdBytes, order.UserId)
-	copy(key[25:33], userIdBytes)
+	copy(key[24:32], userIdBytes)
 
 	value := make([]byte, 8)
 	if order.GTT != nil {
@@ -103,32 +92,75 @@ func PlaceOrder(c echo.Context) error {
 	defer ro.Destroy()
 	ro.SetFillCache(false)
 
-	it := repository.RocksDB.NewIterator(ro)
+	var opponentBook *grocksdb.DB
+	var orderBook *grocksdb.DB
+	var opponentType OrderType
+	if order.Type == BUY {
+		opponentBook = rocksdb.SellOrder
+		orderBook = rocksdb.BuyOrder
+		opponentType = SELL
+	} else {
+		opponentBook = rocksdb.BuyOrder
+		orderBook = rocksdb.SellOrder
+		opponentType = BUY
+	}
+
+	it := opponentBook.NewIterator(ro)
 	defer it.Close()
 
 	it.Seek(orderKey)
+	wo := grocksdb.NewDefaultWriteOptions()
+	defer wo.Destroy()
+
+	for it.Valid() {
+		k, v := it.Key().Data(), it.Value().Data()
+		matchOrder := Order{
+			Type: opponentType,
+		}
+		matchOrder.ParseKV(k, v)
+		isSameUser := order.UserId == matchOrder.UserId
+
+		if isSameUser {
+			it.Next()
+			continue
+		}
+
+		gtt := matchOrder.GTT
+		if gtt == nil || *gtt == 0 {
+			break
+		}
+
+		isExpired := time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt)
+		if isExpired {
+			if err := opponentBook.Delete(wo, k); err != nil {
+				return err
+			}
+			it.Next()
+			continue
+		}
+
+		break
+	}
 
 	if !it.Valid() { // No matching order found
-		wo := grocksdb.NewDefaultWriteOptions()
-		defer wo.Destroy()
-
-		err := repository.RocksDB.Put(wo, orderKey, gtt)
+		err := orderBook.Put(wo, orderKey, gtt)
 		if err != nil {
 			return err
 		}
 		return c.String(http.StatusOK, hex.EncodeToString(orderKey))
 	}
 
+	// Buy -> Get smallest sell order
+	// Sell -> Get biggest buy order
+
 	// Matching order found
 	matchOrder := Order{}
 	matchOrder.ParseKV(it.Key().Data(), it.Value().Data())
 
-	wo := grocksdb.NewDefaultWriteOptions()
-	defer wo.Destroy()
-	err := repository.RocksDB.Delete(wo, it.Key().Data())
-	if err != nil {
-		return err
-	}
+	// err := opponentBook.Delete(wo, it.Key().Data())
+	// if err != nil {
+	// 	return err
+	// }
 
 	return c.JSON(http.StatusOK, matchOrder)
 }

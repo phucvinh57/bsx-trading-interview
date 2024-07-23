@@ -4,7 +4,7 @@ import (
 	"os"
 	"trading-bsx/internal/middleware"
 	"trading-bsx/internal/trade"
-	"trading-bsx/pkg/repository"
+	"trading-bsx/pkg/repository/rocksdb"
 	"trading-bsx/pkg/utils"
 
 	"github.com/labstack/echo/v4"
@@ -17,7 +17,7 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{
 		Out: os.Stdout,
 	})
-	repository.InitRocksDb()
+	rocksdb.Init()
 
 	e := echo.New()
 	e.Validator = utils.NewValidator()

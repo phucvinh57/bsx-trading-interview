@@ -2,7 +2,7 @@ package trade
 
 import (
 	"net/http"
-	"trading-bsx/pkg/repository"
+	"trading-bsx/pkg/repository/rocksdb"
 
 	"github.com/labstack/echo/v4"
 	"github.com/linxGnu/grocksdb"
@@ -11,13 +11,23 @@ import (
 func GetOrders(c echo.Context) error {
 	ro := grocksdb.NewDefaultReadOptions()
 	defer ro.Destroy()
-	it := repository.RocksDB.NewIterator(ro)
+	sellIt := rocksdb.SellOrder.NewIterator(ro)
+	defer sellIt.Close()
 
 	orders := make([]Order, 0)
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		order := Order{}
-		order.ParseKV(it.Key().Data(), it.Value().Data())
+	for sellIt.SeekToFirst(); sellIt.Valid(); sellIt.Next() {
+		order := Order{ Type: SELL }
+		order.ParseKV(sellIt.Key().Data(), sellIt.Value().Data())
 		orders = append(orders, order)
 	}
+
+	buyIt := rocksdb.BuyOrder.NewIterator(ro)
+	defer buyIt.Close()
+	for buyIt.SeekToFirst(); buyIt.Valid(); buyIt.Next() {
+		order := Order{ Type: BUY }
+		order.ParseKV(buyIt.Key().Data(), buyIt.Value().Data())
+		orders = append(orders, order)
+	}
+
 	return c.JSON(http.StatusOK, orders)
 }
