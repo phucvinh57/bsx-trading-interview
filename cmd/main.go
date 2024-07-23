@@ -26,7 +26,7 @@ func main() {
 	order := e.Group("/orders")
 	order.GET("", trade.GetOrders)
 	order.POST("", trade.PlaceOrder)
-	order.DELETE("/:order_id", trade.CancelOrder)
+	order.DELETE("/:order_key", trade.CancelOrder)
 
 	log.Err(e.Start(":8080")).Send()
 }

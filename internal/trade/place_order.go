@@ -1,8 +1,8 @@
 package trade
 
 import (
-	"encoding/base64"
 	"encoding/binary"
+	"encoding/base32"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -34,6 +34,7 @@ type Order struct {
 	Price     float64   `json:"price"`
 	GTT       *uint64   `json:"gtt,omitempty"`
 	Timestamp int64     `json:"timestamp,omitempty"`
+	Key       string    `json:"key,omitempty"`
 }
 
 func (order *Order) ParseKV(key []byte, value []byte) {
@@ -49,8 +50,12 @@ func (order *Order) ParseKV(key []byte, value []byte) {
 	order.Timestamp = int64(ts)
 	order.UserId = binary.BigEndian.Uint64(key[24:32])
 
-	gtt := binary.BigEndian.Uint64(value)
-	order.GTT = &gtt
+	if len(value) > 0 {
+		gtt := binary.BigEndian.Uint64(value)
+		order.GTT = &gtt
+	}
+
+	order.Key = base32.StdEncoding.EncodeToString(key)
 }
 
 func (order *Order) ToKVBytes() ([]byte, []byte) {
@@ -210,5 +215,6 @@ func PlaceOrder(c echo.Context) error {
 		return err
 	}
 
-	return c.String(http.StatusOK, base64.StdEncoding.EncodeToString(orderKey))
+	order.Key = base32.StdEncoding.EncodeToString(orderKey)
+	return c.String(http.StatusOK, order.Key)
 }

@@ -16,7 +16,7 @@ func GetOrders(c echo.Context) error {
 
 	orders := make([]Order, 0)
 	for sellIt.SeekToFirst(); sellIt.Valid(); sellIt.Next() {
-		order := Order{ Type: SELL }
+		order := Order{Type: SELL}
 		order.ParseKV(sellIt.Key().Data(), sellIt.Value().Data())
 		orders = append(orders, order)
 	}
@@ -24,7 +24,7 @@ func GetOrders(c echo.Context) error {
 	buyIt := rocksdb.BuyOrder.NewIterator(ro)
 	defer buyIt.Close()
 	for buyIt.SeekToLast(); buyIt.Valid(); buyIt.Prev() {
-		order := Order{ Type: BUY }
+		order := Order{Type: BUY}
 		order.ParseKV(buyIt.Key().Data(), buyIt.Value().Data())
 		orders = append(orders, order)
 	}
