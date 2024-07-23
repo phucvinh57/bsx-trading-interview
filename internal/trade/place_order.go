@@ -12,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/linxGnu/grocksdb"
+	"github.com/rs/zerolog/log"
 )
 
 type OrderType string
@@ -41,7 +42,11 @@ func (order *Order) ParseKV(key []byte, value []byte) {
 	priceFloat.Quo(priceFloat, big.NewFloat(WEI18))
 	order.Price, _ = priceFloat.Float64()
 
-	order.Timestamp = int64(binary.BigEndian.Uint64(key[16:24]))
+	ts := binary.BigEndian.Uint64(key[16:24])
+	if order.Type == BUY {
+		ts = ^ts
+	}
+	order.Timestamp = int64(ts)
 	order.UserId = binary.BigEndian.Uint64(key[24:32])
 }
 
@@ -54,9 +59,13 @@ func (order *Order) ToKVBytes() ([]byte, []byte) {
 	rawPrice.Mul(rawPrice, big.NewFloat(WEI18)).Int(priceInt)
 	copy(key[16-len(priceInt.Bytes()):], priceInt.Bytes())
 
-	timestamp := time.Now().UnixNano()
+	timestamp := uint64(time.Now().UnixNano())
+	if order.Type == BUY {
+		timestamp = ^timestamp
+	}
 	timestampBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestampBytes, uint64(timestamp))
+	binary.BigEndian.PutUint64(timestampBytes, timestamp)
+
 	copy(key[16:24], timestampBytes)
 
 	userIdBytes := make([]byte, 8)
@@ -73,7 +82,7 @@ func (order *Order) ToKVBytes() ([]byte, []byte) {
 const WEI18 = 1e18
 
 func getMatchBuyOrder(order *Order) ([]byte, *Order) {
-	// Sell -> Get biggest buy order -> Sort descending
+	// Sell -> Get biggest buy order -> Seek from the last item in the list
 	ro := grocksdb.NewDefaultReadOptions()
 	defer ro.Destroy()
 	it := rocksdb.BuyOrder.NewIterator(ro)
@@ -113,7 +122,7 @@ func getMatchBuyOrder(order *Order) ([]byte, *Order) {
 }
 
 func getMatchSellOrder(order *Order) ([]byte, *Order) {
-	// Buy -> Get smallest sell order -> Sort ascending
+	// Buy -> Get smallest sell order -> Seek from the first item in the list
 	ro := grocksdb.NewDefaultReadOptions()
 	defer ro.Destroy()
 	it := rocksdb.SellOrder.NewIterator(ro)
@@ -142,7 +151,7 @@ func getMatchSellOrder(order *Order) ([]byte, *Order) {
 				continue
 			}
 		}
-		if matchOrder.Price >= order.Price {
+		if matchOrder.Price <= order.Price {
 			return k, &matchOrder
 		}
 
@@ -166,22 +175,28 @@ func PlaceOrder(c echo.Context) error {
 	}
 
 	var book *grocksdb.DB
+	var opponentBook *grocksdb.DB
 	var matchOrder *Order
 	var matchOrderKey []byte
 
 	if order.Type == BUY {
-		book = rocksdb.SellOrder
+		book = rocksdb.BuyOrder
+		opponentBook = rocksdb.SellOrder
 		matchOrderKey, matchOrder = getMatchSellOrder(&order)
 	} else {
-		book = rocksdb.BuyOrder
+		book = rocksdb.SellOrder
+		opponentBook = rocksdb.BuyOrder
 		matchOrderKey, matchOrder = getMatchBuyOrder(&order)
 	}
+
+	log.Info().Interface("order", order).Msg("Place order")
+	log.Info().Interface("matchOrder", matchOrder).Msg("Match order")
 
 	wo := grocksdb.NewDefaultWriteOptions()
 	defer wo.Destroy()
 
 	if matchOrder != nil {
-		if err := book.Delete(wo, matchOrderKey); err != nil {
+		if err := opponentBook.Delete(wo, matchOrderKey); err != nil {
 			return err
 		}
 		return c.JSON(http.StatusOK, matchOrder)
