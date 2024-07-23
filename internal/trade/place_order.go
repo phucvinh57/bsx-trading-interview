@@ -72,13 +72,92 @@ func (order *Order) ToKVBytes() ([]byte, []byte) {
 
 const WEI18 = 1e18
 
+func getMatchBuyOrder(order *Order) ([]byte, *Order) {
+	// Sell -> Get biggest buy order -> Sort descending
+	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
+	it := rocksdb.BuyOrder.NewIterator(ro)
+	defer it.Close()
+
+	it.SeekToLast()
+	for it.Valid() {
+		k, v := it.Key().Data(), it.Value().Data()
+		matchOrder := Order{
+			Type: BUY,
+		}
+		matchOrder.ParseKV(k, v)
+		if matchOrder.UserId == order.UserId {
+			it.Prev()
+			continue
+		}
+		gtt := matchOrder.GTT
+		if gtt != nil && *gtt != 0 {
+			if time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt) {
+				wo := grocksdb.NewDefaultWriteOptions()
+				defer wo.Destroy()
+				if err := rocksdb.BuyOrder.Delete(wo, k); err != nil {
+					fmt.Println(err)
+				}
+				it.Prev()
+				continue
+			}
+		}
+		if matchOrder.Price >= order.Price {
+			return k, &matchOrder
+		}
+
+		// The biggest buy order is smaller than the current order, so no need to continue
+		return nil, nil
+	}
+	return nil, nil
+}
+
+func getMatchSellOrder(order *Order) ([]byte, *Order) {
+	// Buy -> Get smallest sell order -> Sort ascending
+	ro := grocksdb.NewDefaultReadOptions()
+	defer ro.Destroy()
+	it := rocksdb.SellOrder.NewIterator(ro)
+	defer it.Close()
+
+	it.SeekToFirst()
+	for it.Valid() {
+		k, v := it.Key().Data(), it.Value().Data()
+		matchOrder := Order{
+			Type: SELL,
+		}
+		matchOrder.ParseKV(k, v)
+		if matchOrder.UserId == order.UserId {
+			it.Next()
+			continue
+		}
+		gtt := matchOrder.GTT
+		if gtt != nil && *gtt != 0 {
+			if time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt) {
+				wo := grocksdb.NewDefaultWriteOptions()
+				defer wo.Destroy()
+				if err := rocksdb.SellOrder.Delete(wo, k); err != nil {
+					fmt.Println(err)
+				}
+				it.Next()
+				continue
+			}
+		}
+		if matchOrder.Price >= order.Price {
+			return k, &matchOrder
+		}
+
+		// The biggest buy order is smaller than the current order, so no need to continue
+		return nil, nil
+	}
+	return nil, nil
+}
+
 func PlaceOrder(c echo.Context) error {
 	body := CreateOrder{}
 	if err := utils.BindNValidate(c, &body); err != nil {
 		fmt.Println(err)
 		return err
 	}
-
 	order := Order{
 		UserId: c.Get("userId").(uint64),
 		Type:   body.Type,
@@ -86,81 +165,31 @@ func PlaceOrder(c echo.Context) error {
 		GTT:    body.GTT,
 	}
 
-	orderKey, gtt := order.ToKVBytes()
+	var book *grocksdb.DB
+	var matchOrder *Order
+	var matchOrderKey []byte
 
-	ro := grocksdb.NewDefaultReadOptions()
-	defer ro.Destroy()
-	ro.SetFillCache(false)
-
-	var opponentBook *grocksdb.DB
-	var orderBook *grocksdb.DB
-	var opponentType OrderType
 	if order.Type == BUY {
-		opponentBook = rocksdb.SellOrder
-		orderBook = rocksdb.BuyOrder
-		opponentType = SELL
+		book = rocksdb.SellOrder
+		matchOrderKey, matchOrder = getMatchSellOrder(&order)
 	} else {
-		opponentBook = rocksdb.BuyOrder
-		orderBook = rocksdb.SellOrder
-		opponentType = BUY
+		book = rocksdb.BuyOrder
+		matchOrderKey, matchOrder = getMatchBuyOrder(&order)
 	}
 
-	it := opponentBook.NewIterator(ro)
-	defer it.Close()
-
-	it.Seek(orderKey)
 	wo := grocksdb.NewDefaultWriteOptions()
 	defer wo.Destroy()
 
-	for it.Valid() {
-		k, v := it.Key().Data(), it.Value().Data()
-		matchOrder := Order{
-			Type: opponentType,
-		}
-		matchOrder.ParseKV(k, v)
-		isSameUser := order.UserId == matchOrder.UserId
-
-		if isSameUser {
-			it.Next()
-			continue
-		}
-
-		gtt := matchOrder.GTT
-		if gtt == nil || *gtt == 0 {
-			break
-		}
-
-		isExpired := time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt)
-		if isExpired {
-			if err := opponentBook.Delete(wo, k); err != nil {
-				return err
-			}
-			it.Next()
-			continue
-		}
-
-		break
-	}
-
-	if !it.Valid() { // No matching order found
-		err := orderBook.Put(wo, orderKey, gtt)
-		if err != nil {
+	if matchOrder != nil {
+		if err := book.Delete(wo, matchOrderKey); err != nil {
 			return err
 		}
-		return c.String(http.StatusOK, hex.EncodeToString(orderKey))
+		return c.JSON(http.StatusOK, matchOrder)
 	}
 
-	// Buy -> Get smallest sell order
-	// Sell -> Get biggest buy order
-
-	// Matching order found
-	matchOrder := Order{}
-	matchOrder.ParseKV(it.Key().Data(), it.Value().Data())
-
-	// err := opponentBook.Delete(wo, it.Key().Data())
-	// if err != nil {
-	// 	return err
-	// }
-
-	return c.JSON(http.StatusOK, matchOrder)
+	orderKey, orderValue := order.ToKVBytes()
+	if err := book.Put(wo, orderKey, orderValue); err != nil {
+		return err
+	}
+	return c.String(http.StatusOK, hex.EncodeToString(orderKey))
 }

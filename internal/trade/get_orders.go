@@ -23,7 +23,7 @@ func GetOrders(c echo.Context) error {
 
 	buyIt := rocksdb.BuyOrder.NewIterator(ro)
 	defer buyIt.Close()
-	for buyIt.SeekToFirst(); buyIt.Valid(); buyIt.Next() {
+	for buyIt.SeekToLast(); buyIt.Valid(); buyIt.Prev() {
 		order := Order{ Type: BUY }
 		order.ParseKV(buyIt.Key().Data(), buyIt.Value().Data())
 		orders = append(orders, order)
