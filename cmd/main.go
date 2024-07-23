@@ -24,6 +24,7 @@ func main() {
 	e.Use(middleware.VerifyUser)
 
 	order := e.Group("/orders")
+	order.GET("", trade.GetOrders)
 	order.POST("", trade.PlaceOrder)
 	order.DELETE("/:order_id", trade.CancelOrder)
 
