@@ -1,8 +1,8 @@
 package trade
 
 import (
+	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -33,7 +33,7 @@ type Order struct {
 	Type      OrderType `json:"type"`
 	Price     float64   `json:"price"`
 	GTT       *uint64   `json:"gtt,omitempty"`
-	Timestamp int64     `json:"timestamp"`
+	Timestamp int64     `json:"timestamp,omitempty"`
 }
 
 func (order *Order) ParseKV(key []byte, value []byte) {
@@ -48,6 +48,9 @@ func (order *Order) ParseKV(key []byte, value []byte) {
 	}
 	order.Timestamp = int64(ts)
 	order.UserId = binary.BigEndian.Uint64(key[24:32])
+
+	gtt := binary.BigEndian.Uint64(value)
+	order.GTT = &gtt
 }
 
 func (order *Order) ToKVBytes() ([]byte, []byte) {
@@ -101,7 +104,7 @@ func getMatchBuyOrder(order *Order) ([]byte, *Order) {
 		}
 		gtt := matchOrder.GTT
 		if gtt != nil && *gtt != 0 {
-			if time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt) {
+			if time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt)*int64(time.Second) {
 				wo := grocksdb.NewDefaultWriteOptions()
 				defer wo.Destroy()
 				if err := rocksdb.BuyOrder.Delete(wo, k); err != nil {
@@ -141,7 +144,7 @@ func getMatchSellOrder(order *Order) ([]byte, *Order) {
 		}
 		gtt := matchOrder.GTT
 		if gtt != nil && *gtt != 0 {
-			if time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt) {
+			if time.Now().UnixNano() > matchOrder.Timestamp+int64(*gtt)*int64(time.Second) {
 				wo := grocksdb.NewDefaultWriteOptions()
 				defer wo.Destroy()
 				if err := rocksdb.SellOrder.Delete(wo, k); err != nil {
@@ -155,7 +158,7 @@ func getMatchSellOrder(order *Order) ([]byte, *Order) {
 			return k, &matchOrder
 		}
 
-		// The biggest buy order is smaller than the current order, so no need to continue
+		// The smallest sell order is bigger than the current order, so no need to continue
 		return nil, nil
 	}
 	return nil, nil
@@ -206,5 +209,6 @@ func PlaceOrder(c echo.Context) error {
 	if err := book.Put(wo, orderKey, orderValue); err != nil {
 		return err
 	}
-	return c.String(http.StatusOK, hex.EncodeToString(orderKey))
+
+	return c.String(http.StatusOK, base64.StdEncoding.EncodeToString(orderKey))
 }
