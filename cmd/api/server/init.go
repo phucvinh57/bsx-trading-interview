@@ -36,7 +36,7 @@ func New() *echo.Echo {
 	order := e.Group("/orders")
 	order.GET("", trade.GetOrders)
 	order.POST("", trade.PlaceOrder)
-	order.DELETE("/:order_key", trade.CancelOrder)
+	order.DELETE("/:order_id", trade.CancelOrder)
 
 	return e
 }

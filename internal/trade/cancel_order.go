@@ -13,11 +13,11 @@ import (
 	"github.com/linxGnu/grocksdb"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type DeleteOrder struct {
-	OrderKey string    `param:"order_key" validate:"required"`
-	Type     models.OrderType `query:"type" validate:"required,oneof=BUY SELL"`
+	OrderId primitive.ObjectID    `param:"order_id" validate:"required"`
 }
 
 func CancelOrder(c echo.Context) error {
@@ -26,10 +26,18 @@ func CancelOrder(c echo.Context) error {
 		fmt.Println(err)
 		return err
 	}
-
 	userId := c.Get("userId").(uint64)
+
+	order := models.Order{}
+	if err := mongodb.Order.FindOneAndDelete(c.Request().Context(), bson.M{
+		"_id": req.OrderId,
+		"user_id": userId,
+	}).Decode(&order); err != nil {
+		return err
+	}
+
 	var book *grocksdb.DB
-	if req.Type == models.BUY {
+	if order.Type == models.BUY {
 		book = rocksdb.BuyOrder
 	} else {
 		book = rocksdb.SellOrder
@@ -37,29 +45,14 @@ func CancelOrder(c echo.Context) error {
 	wo := grocksdb.NewDefaultWriteOptions()
 	defer wo.Destroy()
 
-	orderKey, err := base32.StdEncoding.DecodeString(req.OrderKey)
-	if err != nil {
-		return err
-	}	
-	order := models.Order{ Type: req.Type }
-	order.ParseKV(orderKey, nil)
-	if order.UserId != userId {
-		return echo.ErrNotFound
-	}
+	orderKey, _ := base32.StdEncoding.DecodeString(order.Key)
 
 	mutex.Lock()
 	defer mutex.Unlock()
-	
 	if err := book.Delete(wo, orderKey); err != nil {
 		return err
 	}
-	result, err := mongodb.Order.DeleteOne(c.Request().Context(), bson.M{
-		"key": req.OrderKey,
-	})
-	if err != nil {
-		return err
-	}
-	log.Info().Interface("result", result).Msg("Cancel order")
 
-	return c.String(http.StatusOK, req.OrderKey)
+	log.Info().Interface("order", order).Msg("Cancel order")
+	return c.String(http.StatusOK, order.ID.Hex())
 }

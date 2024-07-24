@@ -9,6 +9,7 @@ import (
 	"trading-bsx/pkg/db/models"
 	"trading-bsx/pkg/testutil"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,4 +48,45 @@ func Test_PlaceOrders(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&orders)
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Len(t, orders, len(prices))
+}
+
+
+func Test_MatchAskOrder(t *testing.T) {
+	t.Setenv("ENV", "test")
+	s := server.New()
+	defer s.Close()
+
+	client := testutil.NewClient(s)
+	client.SetUser(1)
+
+	var prices = []float64{100.5, 110.2, 120.3, 130.4, 140.5, 150.6, 160.7, 170.8, 180.9, 190.0}
+	for _, price := range prices {
+		client.Request(&testutil.RequestOption{
+			Method: http.MethodPost,
+			URL:    "/orders",
+			Body: trade.CreateOrder{
+				Type:  models.BUY,
+				Price: price,
+			},
+		})
+	}
+
+	client.SetUser(2)
+	res := client.Request(&testutil.RequestOption{
+		Method: http.MethodPost,
+		URL:    "/orders",
+		Body: trade.CreateOrder{
+			Type:  models.SELL,
+			Price: 100.5,
+		},
+	})
+	assert.Equal(t, http.StatusOK, res.Code)
+	matchedOrder := models.Order{}
+	resp := res.Body.String()
+	log.Info().Msg(resp)
+
+	err := json.NewDecoder(res.Body).Decode(&matchedOrder)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 190.0, matchedOrder.Price)
 }

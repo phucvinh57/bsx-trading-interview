@@ -6,10 +6,9 @@ build:
 	go build cmd/main.go
 
 test:
+	docker compose up -d
 	go test -v ./...
 clean:
 	rm -f main
 	rm -rf tmp **/rocksdb_data rocksdb_data
-	docker exec mongodb mongosh -u root -p helloworld \
-		--eval "use bsx-trading" \
-		--eval "db.dropDatabase()"
+	docker compose down --volumes
