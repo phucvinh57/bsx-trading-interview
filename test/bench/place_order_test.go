@@ -3,7 +3,6 @@ package engine_bench_test
 import (
 	"math/rand/v2"
 	"net/http"
-	"sync"
 	"testing"
 	"trading-bsx/cmd/api/server"
 	"trading-bsx/internal/trade"
@@ -11,36 +10,57 @@ import (
 	"trading-bsx/pkg/testutil"
 )
 
-func Benchmark_PlaceOrders(b *testing.B) {
+func Benchmark_PlaceOnlyOneOrderType(b *testing.B) {
 	b.Setenv("ENV", "test")
 	s := server.New()
 	defer s.Close()
 
 	const minPrice = 100.0
 	const maxPrice = 200.0
-	const numOfUsers = 100
 
-	wg := sync.WaitGroup{}
+	client := testutil.NewClient(s)
 
-	for i := 1; i <= numOfUsers; i++ {
-		wg.Add(1)
-		go func(userId uint64) {
-			defer wg.Done()
-			client := testutil.NewClient(s)
-			client.SetUser(userId)
-
-			for j := 0; j < b.N; j++ {
-				price := minPrice + rand.Float64()*(maxPrice-minPrice)
-				client.Request(&testutil.RequestOption{
-					Method: http.MethodPost,
-					URL:    "/orders",
-					Body: trade.CreateOrder{
-						Type:  models.BUY,
-						Price: price,
-					},
-				})
-			}
-		}(uint64(i))
+	for j := 0; j < b.N; j++ {
+		client.SetUser(rand.Uint64N(200))
+		price := minPrice + rand.Float64()*(maxPrice-minPrice)
+		client.Request(&testutil.RequestOption{
+			Method: http.MethodPost,
+			URL:    "/orders",
+			Body: trade.CreateOrder{
+				Type:  models.BUY,
+				Price: price,
+			},
+		})
 	}
-	wg.Wait()
+}
+
+func Benchmark_PlaceRandomBuyNSellOrders(b *testing.B) {
+	b.Setenv("ENV", "test")
+	s := server.New()
+	defer s.Close()
+
+	const minPrice = 100.0
+	const maxPrice = 200.0
+
+	client := testutil.NewClient(s)
+
+	for j := 0; j < b.N; j++ {
+		var orderType models.OrderType
+		client.SetUser(rand.Uint64N(200))
+		price := minPrice + rand.Float64()*(maxPrice-minPrice)
+
+		if rand.IntN(2) == 0 {
+			orderType = models.BUY
+		} else {
+			orderType = models.SELL
+		}
+		client.Request(&testutil.RequestOption{
+			Method: http.MethodPost,
+			URL:    "/orders",
+			Body: trade.CreateOrder{
+				Type:  orderType,
+				Price: price,
+			},
+		})
+	}
 }
