@@ -20,7 +20,7 @@ type Order struct {
 	UserId    uint64             `json:"userId" bson:"user_id"`
 	Type      OrderType          `json:"type" bson:"type"`
 	Price     float64            `json:"price" bson:"price"`
-	GTT       *uint64            `json:"gtt,omitempty" bson:"gtt,omitempty"`
+	ExpiredAt *uint64            `json:"expiredAt,omitempty" bson:"expired_at,omitempty"`
 	Timestamp uint64             `json:"timestamp,omitempty" bson:"timestamp,omitempty"`
 	Key       string             `json:"key,omitempty" bson:"key,omitempty"`
 }
@@ -39,8 +39,8 @@ func (order *Order) ParseKV(key []byte, value []byte) {
 	order.UserId = binary.BigEndian.Uint64(key[24:32])
 
 	if len(value) > 0 {
-		gtt := binary.BigEndian.Uint64(value)
-		order.GTT = &gtt
+		exp := binary.BigEndian.Uint64(value)
+		order.ExpiredAt = &exp
 	}
 
 	order.Key = base32.StdEncoding.EncodeToString(key)
@@ -68,8 +68,8 @@ func (order *Order) ToKVBytes() ([]byte, []byte) {
 	copy(key[24:32], userIdBytes)
 
 	value := make([]byte, 8)
-	if order.GTT != nil {
-		binary.BigEndian.PutUint64(value, *order.GTT)
+	if order.ExpiredAt != nil {
+		binary.BigEndian.PutUint64(value, *order.ExpiredAt)
 	}
 	return key, value
 }

@@ -27,12 +27,17 @@ func PlaceOrder(c echo.Context) error {
 		fmt.Println(err)
 		return err
 	}
+	
 	order := models.Order{
 		UserId:    c.Get("userId").(uint64),
 		Type:      body.Type,
 		Price:     body.Price,
-		GTT:       body.GTT,
 		Timestamp: uint64(time.Now().UnixNano()),
+		ExpiredAt: nil,
+	}
+	if body.GTT != nil {
+		tmp := *body.GTT * uint64(time.Second) + order.Timestamp
+		order.ExpiredAt = &tmp
 	}
 
 	var book *grocksdb.DB
@@ -60,6 +65,7 @@ func PlaceOrder(c echo.Context) error {
 		if err := opponentBook.Delete(wo, matchOrderKey); err != nil {
 			return err
 		}
+
 		return c.JSON(http.StatusOK, matchOrder)
 	}
 
@@ -94,9 +100,8 @@ func getMatchBuyOrder(order *models.Order) ([]byte, *models.Order) {
 			it.Prev()
 			continue
 		}
-		gtt := matchOrder.GTT
-		if gtt != nil && *gtt != 0 {
-			if uint64(time.Now().UnixNano()) > matchOrder.Timestamp+(*gtt)*uint64(time.Second) {
+		if matchOrder.ExpiredAt != nil {
+			if uint64(time.Now().UnixNano()) > *matchOrder.ExpiredAt {
 				wo := grocksdb.NewDefaultWriteOptions()
 				defer wo.Destroy()
 				if err := rocksdb.BuyOrder.Delete(wo, k); err != nil {
@@ -134,9 +139,8 @@ func getMatchSellOrder(order *models.Order) ([]byte, *models.Order) {
 			it.Next()
 			continue
 		}
-		gtt := matchOrder.GTT
-		if gtt != nil && *gtt != 0 {
-			if uint64(time.Now().UnixNano()) > matchOrder.Timestamp+(*gtt)*uint64(time.Second) {
+		if matchOrder.ExpiredAt != nil {
+			if uint64(time.Now().UnixNano()) > *matchOrder.ExpiredAt {
 				wo := grocksdb.NewDefaultWriteOptions()
 				defer wo.Destroy()
 				if err := rocksdb.SellOrder.Delete(wo, k); err != nil {

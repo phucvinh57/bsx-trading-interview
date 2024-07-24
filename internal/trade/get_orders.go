@@ -2,32 +2,39 @@ package trade
 
 import (
 	"net/http"
+	"time"
 	"trading-bsx/pkg/db/models"
-	"trading-bsx/pkg/db/rocksdb"
+	"trading-bsx/pkg/db/mongodb"
 
 	"github.com/labstack/echo/v4"
-	"github.com/linxGnu/grocksdb"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func GetOrders(c echo.Context) error {
-	ro := grocksdb.NewDefaultReadOptions()
-	defer ro.Destroy()
-	sellIt := rocksdb.SellOrder.NewIterator(ro)
-	defer sellIt.Close()
-
+	userId := c.Get("userId").(uint64)
+	reqCtx := c.Request().Context()
 	orders := make([]models.Order, 0)
-	for sellIt.SeekToFirst(); sellIt.Valid(); sellIt.Next() {
-		order := models.Order{Type: models.SELL}
-		order.ParseKV(sellIt.Key().Data(), sellIt.Value().Data())
-		orders = append(orders, order)
+	ts := uint64(time.Now().UnixNano())
+	filter := bson.M{
+		"$and": []bson.M{
+			{"user_id": userId},
+			{
+				"$or": []bson.M{
+					{"expired_at": bson.M{"$gte": ts}},
+					{"expired_at": 0},
+					{"expired_at": bson.M{"$exists": false}},
+				},
+			},
+		},
 	}
-
-	buyIt := rocksdb.BuyOrder.NewIterator(ro)
-	defer buyIt.Close()
-	for buyIt.SeekToLast(); buyIt.Valid(); buyIt.Prev() {
-		order := models.Order{Type: models.BUY}
-		order.ParseKV(buyIt.Key().Data(), buyIt.Value().Data())
-		orders = append(orders, order)
+	cursor, err := mongodb.Order.Find(reqCtx, filter)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(reqCtx)
+	err = cursor.All(reqCtx, &orders)
+	if err != nil {
+		return err
 	}
 
 	return c.JSON(http.StatusOK, orders)

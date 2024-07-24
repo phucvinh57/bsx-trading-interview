@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -34,4 +35,11 @@ func Init() {
 
 	Raw = client.Database("bsx-trading")
 	Order = Raw.Collection("orders")
+
+	bgCtx := context.Background()
+	Order.Indexes().CreateOne(bgCtx, mongo.IndexModel{
+		Keys: bson.D{{Key: "user_id", Value: 1}},
+	})
+
+	log.Info().Msg("MongoDB connected")
 }

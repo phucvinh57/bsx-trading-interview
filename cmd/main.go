@@ -26,6 +26,7 @@ func main() {
 	mongodb.Init()
 
 	e := echo.New()
+	e.HTTPErrorHandler = utils.HttpErrorHandler
 	e.Validator = utils.NewValidator()
 	e.Use(middleware.VerifyUser)
 

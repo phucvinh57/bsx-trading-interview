@@ -10,8 +10,8 @@ var BuyOrder *grocksdb.DB
 var SellOrder *grocksdb.DB
 
 func Init() {
-	const buyOrderPath = "./data/buy_order"
-	const sellOrderPath = "./data/sell_order"
+	const buyOrderPath = "./rocksdb_data/buy_order"
+	const sellOrderPath = "./rocksdb_data/sell_order"
 	os.MkdirAll(buyOrderPath, os.ModePerm)
 	os.MkdirAll(sellOrderPath, os.ModePerm)
 

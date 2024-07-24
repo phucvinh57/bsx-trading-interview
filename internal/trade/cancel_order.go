@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"trading-bsx/pkg/db/models"
+	"trading-bsx/pkg/db/mongodb"
 	"trading-bsx/pkg/db/rocksdb"
 	"trading-bsx/pkg/utils"
 
 	"github.com/labstack/echo/v4"
 	"github.com/linxGnu/grocksdb"
+	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type DeleteOrder struct {
@@ -47,6 +50,13 @@ func CancelOrder(c echo.Context) error {
 	if err := book.Delete(wo, orderKey); err != nil {
 		return err
 	}
+	result, err := mongodb.Order.DeleteOne(c.Request().Context(), bson.M{
+		"key": req.OrderKey,
+	})
+	if err != nil {
+		return err
+	}
+	log.Info().Interface("result", result).Msg("Cancel order")
 
 	return c.String(http.StatusOK, req.OrderKey)
 }
