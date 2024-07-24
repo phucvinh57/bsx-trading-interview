@@ -17,10 +17,11 @@ import (
 func New() *echo.Echo {
 	if os.Getenv("ENV") == "test" {
 		godotenv.Load("../.env")
+		zerolog.SetGlobalLevel(zerolog.Disabled)
 	} else {
 		godotenv.Load()
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	}
-	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{
 		Out: os.Stdout,
 	})

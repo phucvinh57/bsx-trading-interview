@@ -1,15 +1,18 @@
 package engine_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
 	"trading-bsx/cmd/api/server"
 	"trading-bsx/internal/trade"
 	"trading-bsx/pkg/db/models"
+	"trading-bsx/pkg/db/mongodb"
 	"trading-bsx/pkg/testutil"
 
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func Test_PlaceOrders(t *testing.T) {
@@ -18,27 +21,24 @@ func Test_PlaceOrders(t *testing.T) {
 	defer s.Close()
 
 	client := testutil.NewClient(s)
-	client.SetUser(1)
-
 	var prices = []float64{100.5, 110.2, 120.3, 130.4, 140.5, 150.6, 160.7, 170.8, 180.9, 190.0}
-	for i, price := range prices {
-		var orderType models.OrderType
-		if i%2 == 0 {
-			orderType = models.BUY
-		} else {
-			orderType = models.SELL
+
+	for _, price := range prices {
+		for j := 1; j <= 2; j++ {
+			client.SetUser(uint64(j))
+			res := client.Request(&testutil.RequestOption{
+				Method: http.MethodPost,
+				URL:    "/orders",
+				Body: trade.CreateOrder{
+					Type:  models.BUY,
+					Price: price,
+				},
+			})
+			assert.Equal(t, http.StatusOK, res.Code)
 		}
-		res := client.Request(&testutil.RequestOption{
-			Method: http.MethodPost,
-			URL:    "/orders",
-			Body: trade.CreateOrder{
-				Type:  orderType,
-				Price: price,
-			},
-		})
-		assert.Equal(t, http.StatusOK, res.Code)
 	}
 
+	client.SetUser(1)
 	res := client.Request(&testutil.RequestOption{
 		Method: http.MethodGet,
 		URL:    "/orders",
@@ -100,6 +100,10 @@ func Test_MatchBuyOrder(t *testing.T) {
 	assert.Equal(t, http.StatusOK, res.Code)
 	orderId := res.Body.String()
 	assert.Len(t, orderId, 24)
+
+	numOfOrders, err := mongodb.Order.CountDocuments(context.Background(), bson.D{})
+	assert.NoError(t, err)
+	assert.Equal(t, len(prices)-len(matchPrices)+1, int(numOfOrders))
 }
 
 func Test_MatchSellOrder(t *testing.T) {
@@ -153,4 +157,9 @@ func Test_MatchSellOrder(t *testing.T) {
 	assert.Equal(t, http.StatusOK, res.Code)
 	orderId := res.Body.String()
 	assert.Len(t, orderId, 24)
+
+	// Check total number of orders after matching
+	numOfOrders, err := mongodb.Order.CountDocuments(context.Background(), bson.D{})
+	assert.NoError(t, err)
+	assert.Equal(t, len(prices)-len(matchPrices)+1, int(numOfOrders))
 }
