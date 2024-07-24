@@ -20,7 +20,8 @@ import (
 type CreateOrder struct {
 	Type  models.OrderType `json:"type" validate:"required,oneof=BUY SELL"`
 	Price float64          `json:"price" validate:"required,gt=0"`
-	GTT   *uint64          `json:"gtt,omitempty" validate:"omitempty,gt=0"`
+	// Good till time, in milliseconds
+	GTT *uint64 `json:"gtt,omitempty" validate:"omitempty,gt=0"`
 }
 
 var mutex = sync.Mutex{}
@@ -45,7 +46,7 @@ func PlaceOrder(c echo.Context) error {
 		ExpiredAt: nil,
 	}
 	if body.GTT != nil {
-		tmp := *body.GTT*uint64(time.Second) + order.Timestamp
+		tmp := *body.GTT*uint64(time.Millisecond) + order.Timestamp
 		order.ExpiredAt = &tmp
 	}
 
