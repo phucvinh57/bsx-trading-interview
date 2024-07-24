@@ -16,13 +16,13 @@ const (
 )
 
 type Order struct {
-	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	UserId    uint64             `json:"userId" bson:"user_id"`
-	Type      OrderType          `json:"type" bson:"type"`
-	Price     float64            `json:"price" bson:"price"`
-	ExpiredAt *uint64            `json:"expiredAt,omitempty" bson:"expired_at,omitempty"`
-	Timestamp uint64             `json:"timestamp,omitempty" bson:"timestamp,omitempty"`
-	Key       string             `json:"key,omitempty" bson:"key,omitempty"`
+	ID        *primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	UserId    uint64              `json:"userId" bson:"user_id"`
+	Type      OrderType           `json:"type" bson:"type"`
+	Price     float64             `json:"price" bson:"price"`
+	ExpiredAt *uint64             `json:"expiredAt,omitempty" bson:"expired_at,omitempty"`
+	Timestamp uint64              `json:"timestamp,omitempty" bson:"timestamp,omitempty"`
+	Key       string              `json:"key,omitempty" bson:"key,omitempty"`
 }
 
 func (order *Order) ParseKV(key []byte, value []byte) {
@@ -72,6 +72,7 @@ func (order *Order) ToKVBytes() ([]byte, []byte) {
 	if order.ExpiredAt != nil {
 		binary.BigEndian.PutUint64(value, *order.ExpiredAt)
 	}
+	order.Key = base32.StdEncoding.EncodeToString(key)
 	return key, value
 }
 

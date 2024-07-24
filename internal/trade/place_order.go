@@ -1,7 +1,6 @@
 package trade
 
 import (
-	"encoding/base32"
 	"fmt"
 	"net/http"
 	"sync"
@@ -14,6 +13,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/linxGnu/grocksdb"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type CreateOrder struct {
@@ -30,7 +31,12 @@ func PlaceOrder(c echo.Context) error {
 		fmt.Println(err)
 		return err
 	}
-	
+
+	var book *grocksdb.DB
+	var opponentBook *grocksdb.DB
+	var matchOrder *models.Order
+	var matchOrderKey []byte
+
 	order := models.Order{
 		UserId:    c.Get("userId").(uint64),
 		Type:      body.Type,
@@ -39,18 +45,13 @@ func PlaceOrder(c echo.Context) error {
 		ExpiredAt: nil,
 	}
 	if body.GTT != nil {
-		tmp := *body.GTT * uint64(time.Second) + order.Timestamp
+		tmp := *body.GTT*uint64(time.Second) + order.Timestamp
 		order.ExpiredAt = &tmp
 	}
 
-	var book *grocksdb.DB
-	var opponentBook *grocksdb.DB
-	var matchOrder *models.Order
-	var matchOrderKey []byte
-
 	mutex.Lock()
 	defer mutex.Unlock()
-	
+
 	if order.Type == models.BUY {
 		book = rocksdb.BuyOrder
 		opponentBook = rocksdb.SellOrder
@@ -67,11 +68,12 @@ func PlaceOrder(c echo.Context) error {
 	wo := grocksdb.NewDefaultWriteOptions()
 	defer wo.Destroy()
 
+	reqCtx := c.Request().Context()
 	if matchOrder != nil {
 		if err := opponentBook.Delete(wo, matchOrderKey); err != nil {
 			return err
 		}
-
+		mongodb.Order.DeleteOne(reqCtx, bson.M{"key": matchOrder.Key})
 		return c.JSON(http.StatusOK, matchOrder)
 	}
 
@@ -79,13 +81,11 @@ func PlaceOrder(c echo.Context) error {
 	if err := book.Put(wo, orderKey, orderValue); err != nil {
 		return err
 	}
-	order.Key = base32.StdEncoding.EncodeToString(orderKey)
-	result, err := mongodb.Order.InsertOne(c.Request().Context(), order)
+	result, err := mongodb.Order.InsertOne(reqCtx, order)
 	if err != nil {
 		return err
 	}
-	log.Info().Interface("result", result).Msg("Order inserted")
-	return c.String(http.StatusOK, order.Key)
+	return c.String(http.StatusOK, result.InsertedID.(primitive.ObjectID).Hex())
 }
 
 func getMatchBuyOrder(order *models.Order) ([]byte, *models.Order) {
@@ -106,7 +106,7 @@ func getMatchBuyOrder(order *models.Order) ([]byte, *models.Order) {
 			it.Prev()
 			continue
 		}
-		if matchOrder.ExpiredAt != nil {
+		if matchOrder.ExpiredAt != nil && *matchOrder.ExpiredAt > 0 {
 			if uint64(time.Now().UnixNano()) > *matchOrder.ExpiredAt {
 				wo := grocksdb.NewDefaultWriteOptions()
 				defer wo.Destroy()
@@ -145,7 +145,7 @@ func getMatchSellOrder(order *models.Order) ([]byte, *models.Order) {
 			it.Next()
 			continue
 		}
-		if matchOrder.ExpiredAt != nil {
+		if matchOrder.ExpiredAt != nil && *matchOrder.ExpiredAt > 0 {
 			if uint64(time.Now().UnixNano()) > *matchOrder.ExpiredAt {
 				wo := grocksdb.NewDefaultWriteOptions()
 				defer wo.Destroy()
