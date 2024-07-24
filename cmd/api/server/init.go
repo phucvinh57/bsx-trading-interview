@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"os"
@@ -14,10 +14,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func main() {
-	godotenv.Load()
-
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+func New() *echo.Echo {
+	if os.Getenv("ENV") == "test" {
+		godotenv.Load("../.env")
+	} else {
+		godotenv.Load()
+	}
+	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{
 		Out: os.Stdout,
 	})
@@ -35,5 +38,5 @@ func main() {
 	order.POST("", trade.PlaceOrder)
 	order.DELETE("/:order_key", trade.CancelOrder)
 
-	log.Err(e.Start(":8080")).Send()
+	return e
 }

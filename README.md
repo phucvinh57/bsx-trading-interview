@@ -11,3 +11,11 @@
 - [ ] Write tests
 - [ ] Write benchmarks
 - [ ] Write documentation
+
+## Testing
+
+To make environment variables available to the test runner, add this line to VSCode `setting.json`
+
+```json
+"go.testEnvFile": "${workspaceFolder}/.env"
+```

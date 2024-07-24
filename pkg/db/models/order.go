@@ -55,11 +55,12 @@ func (order *Order) ToKVBytes() ([]byte, []byte) {
 	rawPrice.Mul(rawPrice, big.NewFloat(WEI18)).Int(priceInt)
 	copy(key[16-len(priceInt.Bytes()):], priceInt.Bytes())
 
+	ts := order.Timestamp
 	if order.Type == BUY {
-		order.Timestamp = ^order.Timestamp
+		ts = ^ts
 	}
 	timestampBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestampBytes, order.Timestamp)
+	binary.BigEndian.PutUint64(timestampBytes, ts)
 
 	copy(key[16:24], timestampBytes)
 

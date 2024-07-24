@@ -2,7 +2,9 @@ package mongodb
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
@@ -33,7 +35,12 @@ func Init() {
 		panic(err)
 	}
 
-	Raw = client.Database("bsx-trading")
+	dbName := "bsx-trading"
+	if os.Getenv("ENV") == "test" {
+		dbName = fmt.Sprintf("test-%d-bsx-trading", time.Now().UnixMilli())
+	}
+
+	Raw = client.Database(dbName)
 	Order = Raw.Collection("orders")
 
 	bgCtx := context.Background()

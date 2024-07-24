@@ -9,4 +9,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: helloworld
     volumes:
-      - ./mongodb_data:/data/db
+      - mongodb_data:/data/db
+    
+volumes:
+  mongodb_data:

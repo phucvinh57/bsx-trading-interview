@@ -1,7 +1,9 @@
 package rocksdb
 
 import (
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/linxGnu/grocksdb"
 )
@@ -10,8 +12,15 @@ var BuyOrder *grocksdb.DB
 var SellOrder *grocksdb.DB
 
 func Init() {
-	const buyOrderPath = "./rocksdb_data/buy_order"
-	const sellOrderPath = "./rocksdb_data/sell_order"
+	cwd, _ := os.Getwd()
+
+	bookName := ""
+	if os.Getenv("ENV") == "test" {
+		bookName = fmt.Sprintf("test_%d_", time.Now().UnixMilli())
+	}
+
+	buyOrderPath := fmt.Sprintf("%s/rocksdb_data/%sbuy_order", cwd, bookName)
+	sellOrderPath := fmt.Sprintf("%s/rocksdb_data/%ssell_order", cwd, bookName)
 	os.MkdirAll(buyOrderPath, os.ModePerm)
 	os.MkdirAll(sellOrderPath, os.ModePerm)
 
