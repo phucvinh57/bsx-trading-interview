@@ -4,7 +4,8 @@ import (
 	"os"
 	"trading-bsx/internal/middleware"
 	"trading-bsx/internal/trade"
-	"trading-bsx/pkg/repository/rocksdb"
+	"trading-bsx/pkg/db/mongodb"
+	"trading-bsx/pkg/db/rocksdb"
 	"trading-bsx/pkg/utils"
 
 	"github.com/labstack/echo/v4"
@@ -18,6 +19,7 @@ func main() {
 		Out: os.Stdout,
 	})
 	rocksdb.Init()
+	mongodb.Init("mongodb://localhost:27017")
 
 	e := echo.New()
 	e.Validator = utils.NewValidator()

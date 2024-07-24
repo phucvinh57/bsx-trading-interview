@@ -6,7 +6,6 @@
 
 ## TODO:
 
-- [ ] Implement a message queue to receive events fired by order book
 - [ ] Get user's orders from the order book
 - [ ] Write integration tests & unit tests
 - [ ] Refactor code

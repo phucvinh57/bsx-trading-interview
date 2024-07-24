@@ -4,7 +4,8 @@ import (
 	"encoding/base32"
 	"fmt"
 	"net/http"
-	"trading-bsx/pkg/repository/rocksdb"
+	"trading-bsx/pkg/db/models"
+	"trading-bsx/pkg/db/rocksdb"
 	"trading-bsx/pkg/utils"
 
 	"github.com/labstack/echo/v4"
@@ -13,7 +14,7 @@ import (
 
 type DeleteOrder struct {
 	OrderKey string    `param:"order_key" validate:"required"`
-	Type     OrderType `query:"type" validate:"required,oneof=BUY SELL"`
+	Type     models.OrderType `query:"type" validate:"required,oneof=BUY SELL"`
 }
 
 func CancelOrder(c echo.Context) error {
@@ -25,7 +26,7 @@ func CancelOrder(c echo.Context) error {
 
 	userId := c.Get("userId").(uint64)
 	var book *grocksdb.DB
-	if req.Type == BUY {
+	if req.Type == models.BUY {
 		book = rocksdb.BuyOrder
 	} else {
 		book = rocksdb.SellOrder
@@ -37,7 +38,7 @@ func CancelOrder(c echo.Context) error {
 	if err != nil {
 		return err
 	}	
-	order := Order{ Type: req.Type }
+	order := models.Order{ Type: req.Type }
 	order.ParseKV(orderKey, nil)
 	if order.UserId != userId {
 		return echo.ErrNotFound
