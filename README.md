@@ -7,7 +7,7 @@
 ## Tasks:
 
 - [x] Refactor code
-- [ ] Get user's orders from the order book
-- [ ] Write integration tests & unit tests
+- [x] Get user's orders from the order book
+- [ ] Write tests
 - [ ] Write benchmarks
 - [ ] Write documentation

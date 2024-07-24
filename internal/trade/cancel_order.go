@@ -47,6 +47,9 @@ func CancelOrder(c echo.Context) error {
 		return echo.ErrNotFound
 	}
 
+	mutex.Lock()
+	defer mutex.Unlock()
+	
 	if err := book.Delete(wo, orderKey); err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/base32"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 	"trading-bsx/pkg/db/models"
 	"trading-bsx/pkg/db/mongodb"
@@ -20,6 +21,8 @@ type CreateOrder struct {
 	Price float64          `json:"price" validate:"required,gt=0"`
 	GTT   *uint64          `json:"gtt,omitempty" validate:"omitempty,gt=0"`
 }
+
+var mutex = sync.Mutex{}
 
 func PlaceOrder(c echo.Context) error {
 	body := CreateOrder{}
@@ -45,6 +48,9 @@ func PlaceOrder(c echo.Context) error {
 	var matchOrder *models.Order
 	var matchOrderKey []byte
 
+	mutex.Lock()
+	defer mutex.Unlock()
+	
 	if order.Type == models.BUY {
 		book = rocksdb.BuyOrder
 		opponentBook = rocksdb.SellOrder
