@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"os"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,9 +12,14 @@ import (
 var Order *mongo.Collection
 var Raw *mongo.Database
 
-func Init(uri string) {
+func Init() {
+	mongodbUri := os.Getenv("MONGODB_URI")
+	if len(mongodbUri) == 0 {
+		panic("MONGODB_URI is required")
+	}
+
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	opts := options.Client().ApplyURI(uri).SetServerAPIOptions(serverAPI)
+	opts := options.Client().ApplyURI(mongodbUri).SetServerAPIOptions(serverAPI)
 
 	var err error
 	client, err := mongo.Connect(context.TODO(), opts)

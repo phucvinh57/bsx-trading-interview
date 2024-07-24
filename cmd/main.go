@@ -8,18 +8,22 @@ import (
 	"trading-bsx/pkg/db/rocksdb"
 	"trading-bsx/pkg/utils"
 
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
+	godotenv.Load()
+
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{
 		Out: os.Stdout,
 	})
+
 	rocksdb.Init()
-	mongodb.Init("mongodb://localhost:27017")
+	mongodb.Init()
 
 	e := echo.New()
 	e.Validator = utils.NewValidator()

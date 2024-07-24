@@ -4,7 +4,6 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"math/big"
-	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -22,7 +21,7 @@ type Order struct {
 	Type      OrderType          `json:"type" bson:"type"`
 	Price     float64            `json:"price" bson:"price"`
 	GTT       *uint64            `json:"gtt,omitempty" bson:"gtt,omitempty"`
-	Timestamp int64              `json:"timestamp,omitempty" bson:"timestamp,omitempty"`
+	Timestamp uint64             `json:"timestamp,omitempty" bson:"timestamp,omitempty"`
 	Key       string             `json:"key,omitempty" bson:"key,omitempty"`
 }
 
@@ -36,7 +35,7 @@ func (order *Order) ParseKV(key []byte, value []byte) {
 	if order.Type == BUY {
 		ts = ^ts
 	}
-	order.Timestamp = int64(ts)
+	order.Timestamp = ts
 	order.UserId = binary.BigEndian.Uint64(key[24:32])
 
 	if len(value) > 0 {
@@ -56,12 +55,11 @@ func (order *Order) ToKVBytes() ([]byte, []byte) {
 	rawPrice.Mul(rawPrice, big.NewFloat(WEI18)).Int(priceInt)
 	copy(key[16-len(priceInt.Bytes()):], priceInt.Bytes())
 
-	timestamp := uint64(time.Now().UnixNano())
 	if order.Type == BUY {
-		timestamp = ^timestamp
+		order.Timestamp = ^order.Timestamp
 	}
 	timestampBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestampBytes, timestamp)
+	binary.BigEndian.PutUint64(timestampBytes, order.Timestamp)
 
 	copy(key[16:24], timestampBytes)
 
