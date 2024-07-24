@@ -16,7 +16,7 @@ import (
 
 func New() *echo.Echo {
 	if os.Getenv("ENV") == "test" {
-		godotenv.Load("../.env")
+		godotenv.Load("../../.env")
 		zerolog.SetGlobalLevel(zerolog.Disabled)
 	} else {
 		godotenv.Load()

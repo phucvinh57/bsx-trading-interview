@@ -8,7 +8,7 @@
 
 - [x] Refactor code
 - [x] Get user's orders from the order book
-- [ ] Write tests
+- [x] Write tests
 - [ ] Write benchmarks
 - [ ] Write documentation
 
